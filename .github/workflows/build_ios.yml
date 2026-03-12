@@ -1,0 +1,47 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ "main", "release" ]
+  pull_request:
+    branches: [ "main", "release" ]
+  workflow_dispatch:
+
+jobs:
+  build_ios:
+    name: Build iOS (unsigned)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: flutter-actions/setup-flutter@v4
+        with:
+          channel: stable
+          version: 3.35.7
+          cache: true
+
+      - name: Install flutter dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install
+
+      - name: Flutter Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Create unsigned IPA
+        run: |
+          mkdir -p build/ios/ipa/Payload
+          APP_PATH=$(find build/ios -name "Runner.app" -type d | head -1)
+          echo "Found Runner.app at: $APP_PATH"
+          cp -r "$APP_PATH" build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r recon-ios-unsigned.ipa Payload
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recon-ios-unsigned
+          path: build/ios/ipa/recon-ios-unsigned.ipa

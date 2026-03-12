@@ -169,7 +169,9 @@ jobs:
       - name: Create unsigned IPA
         run: |
           mkdir -p build/ios/ipa/Payload
-          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          APP_PATH=$(find build/ios -name "Runner.app" -type d | head -1)
+          echo "Found Runner.app at: $APP_PATH"
+          cp -r "$APP_PATH" build/ios/ipa/Payload/
           cd build/ios/ipa
           zip -r recon-ios-unsigned.ipa Payload
 
