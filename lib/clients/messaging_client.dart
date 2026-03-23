@@ -211,6 +211,8 @@ class MessagingClient extends ChangeNotifier {
     return response;
   }
 
+  String? _senderDisplayName(String userId) => getAsFriend(userId)?.contactUsername;
+
   void addUnread(Message message) {
     var messages = _unreads[message.senderId];
     if (messages == null) {
@@ -221,7 +223,12 @@ class MessagingClient extends ChangeNotifier {
     }
     messages.sort();
     _sortFriendsCache();
-    _notificationClient.showUnreadMessagesNotification(messages.reversed);
+    _notificationClient.showUnreadMessagesNotification(
+      messages.reversed,
+      senderNames: {
+        message.senderId: _senderDisplayName(message.senderId) ?? "",
+      },
+    );
     notifyListeners();
   }
 

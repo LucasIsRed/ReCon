@@ -83,7 +83,19 @@ class NotificationClient {
     return "${messages.length} unread messages. Latest: $latestPreview";
   }
 
-  Future<void> showUnreadMessagesNotification(Iterable<Message> messages) async {
+  String _senderLabel(String senderId, Map<String, String> senderNames) {
+    final senderName = senderNames[senderId]?.trim();
+    if (senderName != null && senderName.isNotEmpty) {
+      return senderName;
+    }
+
+    return senderId.stripUid();
+  }
+
+  Future<void> showUnreadMessagesNotification(
+    Iterable<Message> messages, {
+    Map<String, String> senderNames = const {},
+  }) async {
     if (messages.isEmpty) return;
 
     await _ensureInitialized();
@@ -92,10 +104,10 @@ class NotificationClient {
 
     for (final entry in bySender.entries) {
       final senderMessages = entry.value.toList(growable: false);
-      final uname = entry.key.stripUid();
+      final senderLabel = _senderLabel(entry.key, senderNames);
       await _notifier.show(
-        uname.hashCode,
-        uname,
+        entry.key.hashCode,
+        senderLabel,
         _notificationBody(senderMessages),
         fln.NotificationDetails(
           android: fln.AndroidNotificationDetails(
@@ -108,7 +120,7 @@ class NotificationClient {
             //TODO: Make clicking message notification open chat of specified user.
             styleInformation: fln.MessagingStyleInformation(
               fln.Person(
-                name: uname,
+                name: senderLabel,
                 bot: false,
               ),
               groupConversation: false,
@@ -117,7 +129,7 @@ class NotificationClient {
                   _messagePreview(message),
                   message.sendTime.toLocal(),
                   fln.Person(
-                    name: uname,
+                    name: senderLabel,
                     bot: false,
                   ),
                 );
