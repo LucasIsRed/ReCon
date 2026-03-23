@@ -21,26 +21,82 @@ class NotificationClient {
     name: "Messages",
     description: "Messages received from your friends",
   );
+  static const String _windowsAppName = "ReCon";
+  static const String _windowsAppUserModelId = "de.voidspace.recon";
+  static const String _windowsGuid = "f4d0e6f9-8f19-4f32-91b2-40b66b0b4f77";
 
-  final fln.FlutterLocalNotificationsPlugin _notifier = fln.FlutterLocalNotificationsPlugin()
-    ..initialize(const fln.InitializationSettings(
+  final fln.FlutterLocalNotificationsPlugin _notifier = fln.FlutterLocalNotificationsPlugin();
+  late final Future<bool?> _initialization = _notifier.initialize(
+    const fln.InitializationSettings(
       android: fln.AndroidInitializationSettings("ic_notification"),
       iOS: fln.DarwinInitializationSettings(),
       macOS: fln.DarwinInitializationSettings(),
       linux: fln.LinuxInitializationSettings(defaultActionName: "Open ReCon"),
-    ));
+      windows: fln.WindowsInitializationSettings(
+        appName: _windowsAppName,
+        appUserModelId: _windowsAppUserModelId,
+        guid: _windowsGuid,
+      ),
+    ),
+  );
+
+  Future<void> _ensureInitialized() async {
+    final result = await _initialization;
+    if (result == false) {
+      throw StateError("Notification client failed to initialize");
+    }
+  }
+
+  String _messagePreview(Message message) {
+    switch (message.type) {
+      case MessageType.unknown:
+        return "Unknown Message Type";
+      case MessageType.text:
+        return message.formattedContent.toString().stripHtml();
+      case MessageType.sound:
+        return "Audio Message";
+      case MessageType.sessionInvite:
+        try {
+          final session = Session.fromMap(jsonDecode(message.content));
+          return "Session Invite to ${session.formattedName}";
+        } catch (e) {
+          return "Session Invite";
+        }
+      case MessageType.object:
+        return "Asset";
+      case MessageType.inviteRequest:
+        try {
+          final request = InviteRequest.fromMap(jsonDecode(message.content));
+          return "${request.usernameToInvite} Requested an Invite";
+        } catch (e) {
+          return "Invite Request";
+        }
+    }
+  }
+
+  String _notificationBody(List<Message> messages) {
+    if (messages.length == 1) {
+      return _messagePreview(messages.single);
+    }
+
+    final latestPreview = _messagePreview(messages.last);
+    return "${messages.length} unread messages. Latest: $latestPreview";
+  }
 
   Future<void> showUnreadMessagesNotification(Iterable<Message> messages) async {
     if (messages.isEmpty) return;
 
+    await _ensureInitialized();
+
     final bySender = groupBy(messages, (p0) => p0.senderId);
 
     for (final entry in bySender.entries) {
+      final senderMessages = entry.value.toList(growable: false);
       final uname = entry.key.stripUid();
       await _notifier.show(
         uname.hashCode,
-        null,
-        null,
+        uname,
+        _notificationBody(senderMessages),
         fln.NotificationDetails(
           android: fln.AndroidNotificationDetails(
             _messageChannel.id,
@@ -56,40 +112,9 @@ class NotificationClient {
                 bot: false,
               ),
               groupConversation: false,
-              messages: entry.value.map((message) {
-                String content;
-                switch (message.type) {
-                  case MessageType.unknown:
-                    content = "Unknown Message Type";
-                    break;
-                  case MessageType.text:
-                    content = message.formattedContent.toString();
-                    break;
-                  case MessageType.sound:
-                    content = "Audio Message";
-                    break;
-                  case MessageType.sessionInvite:
-                    try {
-                      final session = Session.fromMap(jsonDecode(message.content));
-                      content = "Session Invite to ${session.formattedName}";
-                    } catch (e) {
-                      content = "Session Invite";
-                    }
-                    break;
-                  case MessageType.object:
-                    content = "Asset";
-                    break;
-                  case MessageType.inviteRequest:
-                    try {
-                      final request = InviteRequest.fromMap(jsonDecode(message.content));
-                      content = "${request.usernameToInvite} Requested an Invite";
-                    } catch (e) {
-                      content = "Invite Request";
-                    }
-                    break;
-                }
+              messages: senderMessages.map((message) {
                 return fln.Message(
-                  content,
+                  _messagePreview(message),
                   message.sendTime.toLocal(),
                   fln.Person(
                     name: uname,
@@ -98,6 +123,9 @@ class NotificationClient {
                 );
               }).toList(),
             ),
+          ),
+          windows: fln.WindowsNotificationDetails(
+            subtitle: senderMessages.length == 1 ? null : "${senderMessages.length} unread messages",
           ),
         ),
       );
